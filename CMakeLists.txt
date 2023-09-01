@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.27)
+set(CMAKE_C_STANDARD 11)
 project(TCCSEngine)
 find_package(Curses REQUIRED)
 include_directories(${CURSES_INCLUDE_DIR})
