@@ -2,15 +2,19 @@
 
 ## Introduction
 
-TCCSEngine is a (work in progress) game engine that is (aspired to be) entirely text-based. It's completely built using C and ncurses.
+This is my personal passion project. Please expect me to fail miserably!
 
-## Building
+TCCSEngine is a graphics engine built using C and ncurses.
 
-### Dependencies
+## Dependencies
 
-To build TCCSEngine, you'll need:
-- gcc (13.2.1 or greater)
-- CMake (3.27.4 or greater)
-- ncurses library
+To use TCCSEngine, you will need:
 
-Since ncurses is only available on Linux and OSX, you will need to use WSL2 or a Virtual Machine in order to build this project if you are on Windows.
+- ncurses.h (Linux/OSX)
+
+## Usage
+
+This repository already has an example project ready for you to try TCCSEngine. The engine is split into modules:
+
+- TCCSMath (tccsmath.h) - handles mathematical objects like matrices
+- TCCSGraphics (tccsgraphics.h) - handles graphical output and structures like scenes, screens, meshes and more
