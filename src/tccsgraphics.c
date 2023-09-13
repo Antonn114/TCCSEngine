@@ -1,5 +1,6 @@
 #include "tccsgraphics.h"
 #include "tccsmath.h"
+#include <stdlib.h>
 
 wchar_t TCCS_braille[256];
 
@@ -9,6 +10,7 @@ void TCCS_graphics_init(){
     for (i = 1; i < 256; i++){
         TCCS_braille[i] = TCCS_braille[i - 1] + 1;
     }
+    TCCS_braille[0] = ' ';
 }
 
 TCCSScreen* TCCS_screen_create(size_t r, size_t c){
@@ -231,4 +233,181 @@ void TCCS_screen_update(TCCSScreen *screen){
     }
     box(screen->window, 0, 0);
     wrefresh(screen->window);
+}
+
+TCCSMesh* TCCS_mesh_init(){
+    TCCSMesh* mesh = (TCCSMesh*)malloc(sizeof(TCCSMesh));
+    if (mesh){
+        mesh->v_cap = mesh->f_cap = 8;
+        mesh->v_size = mesh->f_size = 0;
+        mesh->vertices = (TCCSVertex*)malloc(sizeof(TCCSVertex)*mesh->v_cap);
+        mesh->faces = (uint32_t**)malloc(sizeof(uint32_t*)*mesh->f_cap);
+        mesh->faces_vcount = (size_t*)malloc(sizeof(size_t)*mesh->f_cap);
+    }else{
+        return NULL;
+    }
+    return mesh;
+}
+
+void TCCS_mesh_destroy(TCCSMesh *mesh){
+    size_t i;
+    for (i = 0; i < mesh->f_size; i++){
+        free(mesh->faces[i]);
+    }
+    free(mesh->faces_vcount);
+    free(mesh->faces);
+    free(mesh->vertices);
+    free(mesh);
+}
+
+void TCCS_mesh_resize_vertexlist(TCCSMesh* mesh, size_t new_size){
+    if (mesh){
+        TCCSVertex* vertices = realloc(mesh->vertices, sizeof(TCCSVertex) * new_size);
+        if (vertices){
+            mesh->vertices = vertices;
+            mesh->v_cap = new_size;
+        }
+    }
+}
+
+int TCCS_mesh_push_vertex(TCCSMesh* mesh, TCCSVertex vertex){
+    if (mesh){
+        if (mesh->v_size == mesh->v_cap){
+            TCCS_mesh_resize_vertexlist(mesh, mesh->v_cap*3/2 + 1);
+        }
+        mesh->vertices[mesh->v_size++] = vertex;
+
+        return mesh->v_size - 1;
+    }
+    return -1;
+}
+
+void TCCS_mesh_resize_facelist(TCCSMesh* mesh, size_t new_size){
+    if (mesh){
+        uint32_t** faces = realloc(mesh->faces, sizeof(uint32_t*) * new_size);
+        size_t* faces_vcount = realloc(mesh->faces_vcount, sizeof(size_t) * new_size);
+        if (faces && faces_vcount){
+            mesh->faces = faces;
+            mesh->faces_vcount = faces_vcount;
+            mesh->f_cap = new_size;
+        }
+    }
+}
+
+int TCCS_mesh_push_face(TCCSMesh* mesh, size_t v_count, uint32_t* v_indices){
+    if (mesh){
+        if (mesh->f_size == mesh->f_cap){
+            TCCS_mesh_resize_facelist(mesh, mesh->f_cap*3/2 + 1);
+        }
+        mesh->faces_vcount[mesh->f_size] = v_count;
+        mesh->faces[mesh->f_size] = (uint32_t*)malloc(sizeof(uint32_t) * v_count);
+        memcpy(mesh->faces[mesh->f_size], v_indices, sizeof(*mesh->faces[mesh->f_size]) * v_count);
+        mesh->f_size++;
+        return mesh->f_size - 1;
+    }
+    return -1;
+}
+
+TCCSScene* TCCS_scene_init(){
+    TCCSScene* scene = (TCCSScene*)malloc(sizeof(TCCSScene));
+    if (scene){
+        scene->m_cap = 1;
+        scene->m_size = 0;
+        scene->meshes = (TCCSMesh*)malloc(scene->m_cap*sizeof(TCCSMesh));
+        scene->position = (TCCSVertex*)malloc(scene->m_cap*sizeof(TCCSVertex));
+        scene->mat_perspective_projection = TCCS_matrix_f32_create(4, 4);
+        size_t i, j;
+        for (i = 0; i < 4; i++){
+            for (j = 0; j < 4; j++){
+                scene->mat_perspective_projection->m[i][j] = 0;
+            }
+        }
+    }else{
+        return NULL;
+    }
+    return scene;
+}
+
+void TCCS_scene_set_screen(TCCSScene * scene, TCCSScreen * screen){
+    scene->screen = screen;
+    scene->cam_aspectratio = screen->c*1.0/(screen->r*1.0);
+    scene->origin_x = screen->c/2.0;
+    scene->origin_y = screen->r/2.0;
+}
+void TCCS_scene_set_cam(TCCSScene *scene, float camx, float camy, float camz, float y_far, float y_near, float fov){
+    scene->campos.x = camx;
+    scene->campos.y = camy;
+    scene->campos.z = camz;
+    scene->y_far = y_far;
+    scene->y_near = y_near;
+    scene->fov = fov;
+    // scene->mat_perspective_projection (x, y, z, w = 1)
+    scene->mat_perspective_projection->m[0][0] = 1.0/(scene->cam_aspectratio*tan(scene->fov*M_PI/360.0));
+    scene->mat_perspective_projection->m[1][1] = scene->y_far/(scene->y_far - scene->y_near);
+    scene->mat_perspective_projection->m[3][1] = -scene->y_far*scene->y_near/(scene->y_far - scene->y_near);
+    scene->mat_perspective_projection->m[2][2] = 1.0/tan(scene->fov*M_PI/360.0);
+    scene->mat_perspective_projection->m[1][3] = 1;
+}
+
+void TCCS_scene_resize_meshlist(TCCSScene* scene, size_t new_size){
+    if (scene){
+        TCCSMesh* meshes = realloc(scene->meshes, sizeof(TCCSMesh) * new_size);
+        TCCSVertex* position = realloc(scene->position, sizeof(TCCSVertex) * new_size);
+        if (meshes && position){
+            scene->meshes = meshes;
+            scene->position = position;
+            scene->m_cap = new_size;
+        }
+    }
+}
+
+int TCCS_scene_push_mesh(TCCSScene* scene, TCCSMesh mesh, TCCSVertex pos){
+    if (scene){
+        if (scene->m_size == scene->m_cap){
+            TCCS_scene_resize_meshlist(scene, scene->m_cap*3/2 + 1);
+        }
+        scene->meshes[scene->m_size] = mesh;
+        scene->position[scene->m_size++] = pos;
+        return scene->m_size - 1;
+    }
+    return -1;
+}
+
+void TCCS_scene_render_mesh(TCCSScene *scene, size_t idx){
+    assert(idx < scene->m_size);
+    TCCSVertex* transformed_vertices = scene->meshes[idx].vertices;
+    TCCSMatrixF32** perspective_pos = (TCCSMatrixF32**)malloc(sizeof(TCCSMatrixF32*) * scene->meshes[idx].v_size);
+    size_t i;
+    for (i = 0; i < scene->meshes[idx].v_size; i++){
+        perspective_pos[i] = TCCS_matrix_f32_create(1, 4);
+        perspective_pos[i]->m[0][0] = transformed_vertices[i].x + scene->position[idx].x;
+        perspective_pos[i]->m[0][1] = transformed_vertices[i].y + scene->position[idx].y;
+        perspective_pos[i]->m[0][2] = transformed_vertices[i].z + scene->position[idx].z;
+        perspective_pos[i]->m[0][3] = 1;
+        perspective_pos[i] = TCCS_matrix_f32_multiply(perspective_pos[i], scene->mat_perspective_projection);
+        if (perspective_pos[i]->m[0][3] != 0){
+            perspective_pos[i]->m[0][0] /= perspective_pos[i]->m[0][3];
+            perspective_pos[i]->m[0][1] /= perspective_pos[i]->m[0][3];
+            perspective_pos[i]->m[0][2] /= perspective_pos[i]->m[0][3];
+        }
+        perspective_pos[i]->m[0][0]++;
+        perspective_pos[i]->m[0][2]++;
+        perspective_pos[i]->m[0][0] *= scene->screen->c*0.5;
+        perspective_pos[i]->m[0][2] *= scene->screen->r*0.5;
+    }
+    for (i = 0; i < scene->meshes[idx].f_size; i++){
+        assert (scene->meshes[idx].faces_vcount[i] == 3);
+        uint32_t *faces = scene->meshes[idx].faces[i];
+        float x1, x2, x3, y1, y2, y3;
+        x1 = perspective_pos[faces[0]]->m[0][0];
+        y1 = perspective_pos[faces[0]]->m[0][2];
+        x2 = perspective_pos[faces[1]]->m[0][0];
+        y2 = perspective_pos[faces[1]]->m[0][2];
+        x3 = perspective_pos[faces[2]]->m[0][0];
+        y3 = perspective_pos[faces[2]]->m[0][2];
+        // back-face culling
+        if (normal(x1, -y1, x2, -y2, x3, -y3) < 0.0f) continue;
+        TCCS_screen_drawtriangle(scene->screen, x1, y1, x2, y2, x3, y3);
+    }
+    refresh();
 }

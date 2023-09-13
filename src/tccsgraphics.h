@@ -54,19 +54,40 @@ typedef struct TCCSVertex{
 typedef struct TCCSMesh{
     TCCSVertex* vertices;
     uint32_t** faces;
+    size_t* faces_vcount;
+    size_t v_cap, f_cap;
+    size_t v_size, f_size;
 } TCCSMesh;
 
-TCCSMesh* TCCS_mesh_create(size_t vc, size_t fc);
+TCCSMesh* TCCS_mesh_init();
+void TCCS_mesh_resize_vertexlist(TCCSMesh* mesh, size_t new_size);
+int TCCS_mesh_push_vertex(TCCSMesh* mesh, TCCSVertex vertex);
+void TCCS_mesh_resize_facelist(TCCSMesh* mesh, size_t new_size);
+int TCCS_mesh_push_face(TCCSMesh* mesh, size_t v_count, uint32_t* v_indices);
 TCCSMesh* TCCS_mesh_create_fromobj(const char* filename);
 void TCCS_mesh_destroy(TCCSMesh* mesh);
 
 typedef struct TCCSScene{
     TCCSMesh *meshes;
+    TCCSVertex *position;
+    TCCSScreen *screen;
+    TCCSVertex campos;
+    float y_far, y_near;
+    float fov;
+    float cam_aspectratio;
+    float origin_x, origin_y;
+    size_t m_cap, m_size;
+    TCCSMatrixF32* mat_perspective_projection;
 } TCCSScene;
 
-TCCSScene* TCCS_scene_create(size_t mc);
+TCCSScene* TCCS_scene_init();
+void TCCS_scene_set_screen(TCCSScene* scene, TCCSScreen * screen);
+void TCCS_scene_set_cam(TCCSScene* scene, float camx, float camy, float camz, float y_far, float y_near, float fov);
+void TCCS_scene_resize_meshlist(TCCSScene* scene, size_t new_size);
+int TCCS_scene_push_mesh(TCCSScene* scene, TCCSMesh mesh, TCCSVertex pos);
+
+void TCCS_scene_render_mesh(TCCSScene* scene, size_t idx);
+
 void TCCS_scene_destroy(TCCSScene* scene);
-void TCCS_scene_mesh_add(TCCSScene* scene, TCCSMesh mesh);
-void TCCS_scene_project(TCCSScene* scene, TCCSScreen* screen);
 
 #endif /* __TCCSGRAPHICS_H__ */
