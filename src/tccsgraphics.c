@@ -54,11 +54,14 @@ void TCCS_screen_drawpoint(TCCSScreen *screen, int x, int y){
     for (i = starti; i <= endi; i++){
         for (j = startj; j <= endj; j++){
             screen->m[i][j]++;
-            
         }
     }
 }
 void TCCS_screen_drawline(TCCSScreen *screen, int x1, int y1, int x2, int y2){
+    if (x1 < 0 && x2 < 0) return;
+    if (y1 < 0 && y2 < 0) return;
+    if (x1 > screen->c && x2 > screen->c) return;
+    if (y1 > screen->r && y2 > screen->c) return;
     int dx = abs(x2 - x1);
     int8_t sx = x1 < x2 ? 1 : -1;
     int dy = abs(y2 - y1);
@@ -170,7 +173,7 @@ void TCCS_screen_filltriangle(TCCSScreen *screen, int x1, int y1, int x2, int y2
         swapi32(&x2, &x3);
     }
     float x4 = (float)x1 + (float)(((float)y2 - (float)y1)/((float)y3 - (float)y1))*((float)x3 - (float)x1);
-    
+
     TCCS_screen_filltriangle_flat(screen, x1, y1, x2, y2, x4, y2);
     TCCS_screen_filltriangle_flat(screen, x3, y3, x2, y2, x4, y2);
 }
@@ -207,11 +210,10 @@ void TCCS_screen_clear(TCCSScreen *screen){
             screen->m[i][j] = 0;
         }
     }
-    if (screen->window) wclear(screen->window);
 }
 
 void TCCS_screen_update(TCCSScreen *screen){
-    wclear(screen->window);
+    if (screen->window) wclear(screen->window);
     uint32_t i, j, k, x, y;
     uint32_t ii, jj;
     uint16_t type;
@@ -308,6 +310,51 @@ int TCCS_mesh_push_face(TCCSMesh* mesh, size_t v_count, uint32_t* v_indices){
     return -1;
 }
 
+TCCSMesh* TCCS_mesh_create_fromobj(const char *filename){
+    TCCSMesh *mesh = TCCS_mesh_init();
+    if (mesh){
+        FILE* f = fopen(filename, "r");
+        if (f == NULL){
+            return NULL;
+        }
+        ssize_t read;
+        char* line = NULL;
+        size_t len = 0;
+        char* buf;
+        TCCSVertex foo;
+        TCCS_mesh_push_vertex(mesh, foo);
+        while((read = getline(&line, &len, f)) != -1){
+            buf = strtok(line, " \n");
+            if (buf != NULL){
+                if (buf[0] == 'v'){
+                    TCCSVertex v;
+                    buf = strtok(NULL, " \n\t\0");
+                    v.x = atof(buf);
+                    buf = strtok(NULL, " \n\t\0");
+                    v.z = atof(buf);
+                    buf = strtok(NULL, " \n\t\0");
+                    v.y = atof(buf);
+                    TCCS_mesh_push_vertex(mesh, v);
+                }
+                if (buf[0] == 'f'){
+                    uint32_t a[3];
+                    buf = strtok(NULL, " \n\t\0");
+                    a[0] = atoi(buf);
+                    buf = strtok(NULL, " \n\t\0");
+                    a[1] = atoi(buf);
+                    buf = strtok(NULL, " \n\t\0");
+                    a[2] = atoi(buf);
+                    TCCS_mesh_push_face(mesh, 3, a);
+                }
+            }
+        }
+        fclose(f);
+    }else{
+        return NULL;
+    }
+    return mesh;
+}
+
 TCCSScene* TCCS_scene_init(){
     TCCSScene* scene = (TCCSScene*)malloc(sizeof(TCCSScene));
     if (scene){
@@ -327,6 +374,7 @@ TCCSScene* TCCS_scene_init(){
     }
     return scene;
 }
+
 
 void TCCS_scene_set_screen(TCCSScene * scene, TCCSScreen * screen){
     scene->screen = screen;
@@ -406,7 +454,7 @@ void TCCS_scene_render_mesh(TCCSScene *scene, size_t idx){
         x3 = perspective_pos[faces[2]]->m[0][0];
         y3 = perspective_pos[faces[2]]->m[0][2];
         // back-face culling
-        if (normal(x1, -y1, x2, -y2, x3, -y3) < 0.0f) continue;
+        //if (normal(x1, -y1, x2, -y2, x3, -y3) < 0.0f) continue;
         TCCS_screen_drawtriangle(scene->screen, x1, y1, x2, y2, x3, y3);
     }
     refresh();
