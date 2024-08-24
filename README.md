@@ -2,8 +2,6 @@
 
 ## Introduction
 
-This is my personal passion project. Please expect me to fail miserably!
-
 TCCSEngine is a graphics engine built using C and ncurses.
 
 ## Dependencies
